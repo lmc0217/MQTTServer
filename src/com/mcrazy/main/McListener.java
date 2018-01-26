@@ -26,88 +26,107 @@ import com.mcrazy.log.Log;
  * @author liu mengchao
  * @createDate 2017.1.23
  */
-class McListener {
-	public static void main(String []args) throws Exception {
+public class McListener {
+	private String user = env("APOLLO_USER", "admin");
+	private String password = env("APOLLO_PASSWORD", "password");
+	private String host = env("APOLLO_HOST", "localhost");
+	private int port = Integer.parseInt(env("APOLLO_PORT", "61613"));
+	private CallbackConnection connection;
+	private String destination = "/mqtt/topic/0";
+	
+	private static final McListener listener = new McListener();
 
-        String user = env("APOLLO_USER", "admin");
-        String password = env("APOLLO_PASSWORD", "password");
-        String host = env("APOLLO_HOST", "localhost");
-        int port = Integer.parseInt(env("APOLLO_PORT", "61613"));
-        final String destination = arg(args, 0, "/topic/event");
+	public static McListener getInstance() {
+		return listener;
+	}
 
+	private McListener() {
 
-        MQTT mqtt = new MQTT();
-        mqtt.setHost(host, port);
-        mqtt.setUserName(user);
-        mqtt.setPassword(password);
+	}
+	
+	private void initMQTTListener() {
+        try {
+        	MQTT mqtt = new MQTT();
+        	mqtt.setHost(host, port);
+            mqtt.setUserName(user);
+            mqtt.setPassword(password);
 
+            connection = mqtt.callbackConnection();
+            connection.listener(new org.fusesource.mqtt.client.Listener() {
+                long count = 0;
+                long start = System.currentTimeMillis();
 
-        final CallbackConnection connection = mqtt.callbackConnection();
-        connection.listener(new org.fusesource.mqtt.client.Listener() {
-            long count = 0;
-            long start = System.currentTimeMillis();
-
-            public void onConnected() {
-            }
-            public void onDisconnected() {
-            }
-            public void onFailure(Throwable value) {
-                value.printStackTrace();
-                System.exit(-2);
-            }
-            public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
-                String body = msg.utf8().toString();
-                Log.err.info("收到订阅消息{}", body);
-                if( "SHUTDOWN".equals(body)) {
-                    long diff = System.currentTimeMillis() - start;
-                    Log.err.info(String.format("Received %d in %.2f seconds", count, (1.0*diff/1000.0)));
-                    connection.disconnect(new Callback<Void>() {
-                        @Override
-                        public void onSuccess(Void value) {
-                            System.exit(0);
+                public void onConnected() {
+                }
+                public void onDisconnected() {
+                }
+                public void onFailure(Throwable value) {
+                    value.printStackTrace();
+                    System.exit(-2);
+                }
+                public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
+                    String body = msg.utf8().toString();
+                    Log.err.info("收到订阅消息{}", body);
+                    if( "SHUTDOWN".equals(body)) {
+                        long diff = System.currentTimeMillis() - start;
+                        Log.err.info(String.format("Received %d in %.2f seconds", count, (1.0*diff/1000.0)));
+                        connection.disconnect(new Callback<Void>() {
+                            @Override
+                            public void onSuccess(Void value) {
+                                System.exit(0);
+                            }
+                            @Override
+                            public void onFailure(Throwable value) {
+                                value.printStackTrace();
+                                System.exit(-2);
+                            }
+                        });
+                    } else {
+                        if( count == 0 ) {
+                            start = System.currentTimeMillis();
                         }
-                        @Override
+                        if( count % 1000 == 0 ) {
+                            Log.err.info(String.format("Received %d messages.", count));
+                        }
+                        count ++;
+                    }
+                }
+            });
+            connection.connect(new Callback<Void>() {
+                @Override
+                public void onSuccess(Void value) {
+                    Topic[] topics = {new Topic(destination, QoS.AT_LEAST_ONCE)};
+                    connection.subscribe(topics, new Callback<byte[]>() {
+                        public void onSuccess(byte[] qoses) {
+                        	Log.err.info("============订阅主题成功:{}==============", destination);
+                        }
                         public void onFailure(Throwable value) {
                             value.printStackTrace();
+                            Log.err.info("============订阅主题失败 {}==============", destination);
                             System.exit(-2);
                         }
                     });
-                } else {
-                    if( count == 0 ) {
-                        start = System.currentTimeMillis();
-                    }
-                    if( count % 1000 == 0 ) {
-                        Log.err.info(String.format("Received %d messages.", count));
-                    }
-                    count ++;
                 }
+                @Override
+                public void onFailure(Throwable value) {
+                    value.printStackTrace();
+                    Log.err.info("================连接mqtt失败==============");
+                    System.exit(-2);
+                }
+            });
+            
+            // Wait forever..
+            synchronized (Listener.class) {
+                while(true)
+                    Listener.class.wait();
             }
-        });
-        connection.connect(new Callback<Void>() {
-            @Override
-            public void onSuccess(Void value) {
-                Topic[] topics = {new Topic(destination, QoS.AT_LEAST_ONCE)};
-                connection.subscribe(topics, new Callback<byte[]>() {
-                    public void onSuccess(byte[] qoses) {
-                    }
-                    public void onFailure(Throwable value) {
-                        value.printStackTrace();
-                        System.exit(-2);
-                    }
-                });
-            }
-            @Override
-            public void onFailure(Throwable value) {
-                value.printStackTrace();
-                System.exit(-2);
-            }
-        });
-
-        // Wait forever..
-        synchronized (Listener.class) {
-            while(true)
-                Listener.class.wait();
-        }
+		} catch (Exception e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+	public static void main(String []args) {
+		McListener.getInstance().initMQTTListener();
     }
 
     private static String env(String key, String defaultValue) {
@@ -115,12 +134,5 @@ class McListener {
         if( rc== null )
             return defaultValue;
         return rc;
-    }
-
-    private static String arg(String []args, int index, String defaultValue) {
-        if( index < args.length )
-            return args[index];
-        else
-            return defaultValue;
     }
 }

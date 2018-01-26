@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
  * 
  */
 public final class Log {
-	public static final String PATH_LOG = "/home/workspace/MQTTServer/logs";
-	public static final String PATH_CONF = "/home/workspace/MQTTServer/conf";
+	public static final String PATH_LOG = "/home/workspace/mqttserver/logs";
+	public static final String PATH_CONF = "/home/workspace/mqttserver/conf";
 	
 	private Log(){
 		
