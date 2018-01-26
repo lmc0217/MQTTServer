@@ -20,6 +20,7 @@ import org.fusesource.hawtbuf.*;
 import org.fusesource.mqtt.client.*;
 
 import com.mcrazy.log.Log;
+import com.mcrazy.manager.status.WillMsgListener;
 
 /**
  *  MQTT 数据处理插件
@@ -32,7 +33,8 @@ public class McListener {
 	private String host = env("APOLLO_HOST", "localhost");
 	private int port = Integer.parseInt(env("APOLLO_PORT", "61613"));
 	private CallbackConnection connection;
-	private String destination = "/mqtt/topic/0";
+	private String topic_dev = "/mqtt/topic/0";
+	private String topic_will = "/mcrazy/msg/will";
 	
 	private static final McListener listener = new McListener();
 
@@ -52,7 +54,7 @@ public class McListener {
             mqtt.setPassword(password);
 
             connection = mqtt.callbackConnection();
-            connection.listener(new org.fusesource.mqtt.client.Listener() {
+            connection.listener(new Listener() {
                 long count = 0;
                 long start = System.currentTimeMillis();
 
@@ -64,7 +66,9 @@ public class McListener {
                     value.printStackTrace();
                     System.exit(-2);
                 }
+
                 public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
+                	Log.err.info("收到订阅主题{}", topic.toString());
                     String body = msg.utf8().toString();
                     Log.err.info("收到订阅消息{}", body);
                     if( "SHUTDOWN".equals(body)) {
@@ -95,14 +99,14 @@ public class McListener {
             connection.connect(new Callback<Void>() {
                 @Override
                 public void onSuccess(Void value) {
-                    Topic[] topics = {new Topic(destination, QoS.AT_LEAST_ONCE)};
+                    Topic[] topics = {new Topic(topic_dev, QoS.AT_LEAST_ONCE), new Topic(topic_will, QoS.AT_LEAST_ONCE)};
                     connection.subscribe(topics, new Callback<byte[]>() {
                         public void onSuccess(byte[] qoses) {
-                        	Log.err.info("============订阅主题成功:{}==============", destination);
+                        	Log.err.info("============订阅主题成功:1.{}, 2.{}==============", topic_dev, topic_will);
                         }
                         public void onFailure(Throwable value) {
                             value.printStackTrace();
-                            Log.err.info("============订阅主题失败 {}==============", destination);
+                            Log.err.info("============订阅主题失败==============");
                             System.exit(-2);
                         }
                     });
@@ -116,9 +120,9 @@ public class McListener {
             });
             
             // Wait forever..
-            synchronized (Listener.class) {
+            synchronized (McListener.class) {
                 while(true)
-                    Listener.class.wait();
+                	McListener.class.wait();
             }
 		} catch (Exception e) {
 			// TODO Auto-generated catch block
@@ -127,6 +131,7 @@ public class McListener {
 	}
 	public static void main(String []args) {
 		McListener.getInstance().initMQTTListener();
+//		WillMsgListener.getInstance().initWillMsgListener();
     }
 
     private static String env(String key, String defaultValue) {
