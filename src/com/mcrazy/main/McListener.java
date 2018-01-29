@@ -19,6 +19,9 @@ package com.mcrazy.main;
 import org.fusesource.hawtbuf.*;
 import org.fusesource.mqtt.client.*;
 
+import com.google.protobuf.InvalidProtocolBufferException;
+import com.mcrazy.database.protoc.MadcatPackageProtoc;
+import com.mcrazy.database.protoc.MadcatPackageProtoc.MadcatPackage;
 import com.mcrazy.log.Log;
 import com.mcrazy.manager.status.WillMsgListener;
 
@@ -33,7 +36,7 @@ public class McListener {
 	private String host = env("APOLLO_HOST", "localhost");
 	private int port = Integer.parseInt(env("APOLLO_PORT", "61613"));
 	private CallbackConnection connection;
-	private String topic_dev = "/mqtt/topic/0";
+	private String topic_dev = "/mqtt/topic/pb";
 	private String topic_will = "/mcrazy/msg/will";
 	
 	private static final McListener listener = new McListener();
@@ -55,9 +58,6 @@ public class McListener {
 
             connection = mqtt.callbackConnection();
             connection.listener(new Listener() {
-                long count = 0;
-                long start = System.currentTimeMillis();
-
                 public void onConnected() {
                 }
                 public void onDisconnected() {
@@ -69,31 +69,16 @@ public class McListener {
 
                 public void onPublish(UTF8Buffer topic, Buffer msg, Runnable ack) {
                 	Log.err.info("收到订阅主题{}", topic.toString());
-                    String body = msg.utf8().toString();
-                    Log.err.info("收到订阅消息{}", body);
-                    if( "SHUTDOWN".equals(body)) {
-                        long diff = System.currentTimeMillis() - start;
-                        Log.err.info(String.format("Received %d in %.2f seconds", count, (1.0*diff/1000.0)));
-                        connection.disconnect(new Callback<Void>() {
-                            @Override
-                            public void onSuccess(Void value) {
-                                System.exit(0);
-                            }
-                            @Override
-                            public void onFailure(Throwable value) {
-                                value.printStackTrace();
-                                System.exit(-2);
-                            }
-                        });
-                    } else {
-                        if( count == 0 ) {
-                            start = System.currentTimeMillis();
-                        }
-                        if( count % 1000 == 0 ) {
-                            Log.err.info(String.format("Received %d messages.", count));
-                        }
-                        count ++;
-                    }
+                	//接收Byte[]，反序列化成消息类
+                	try {
+						MadcatPackage packet = MadcatPackage.parseFrom(msg.toByteArray());
+						Log.err.info("收到protobuf消息体转对象{}", packet.toString());
+						Log.err.info("PackageType{}", packet.getPacktypeValue());
+					} catch (InvalidProtocolBufferException e) {
+						// TODO Auto-generated catch block
+						e.printStackTrace();
+						Log.err.info("WARN: {}", e.toString());
+					}
                 }
             });
             connection.connect(new Callback<Void>() {

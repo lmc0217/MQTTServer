@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package MQTTServer;
+option java_package = "com.mcrazy.database.protoc";
+option java_outer_classname = "MadcatPackageProtoc";
+
+enum PackageType{
+	presence = 0;
+	message = 1;
+	iq = 2;
+}
+
+message MadcatPackage{
+	PackageType packtype = 1;	
+	string udid = 2;
+	string model = 3;
+	sint64 timestamp = 4;
+	string devtype = 5;	
+}

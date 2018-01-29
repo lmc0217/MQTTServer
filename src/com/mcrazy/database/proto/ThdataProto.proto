@@ -1,0 +1,11 @@
+syntax = "proto3";
+
+package MQTTServer;
+option java_package = "com.mcrazy.database.protoc";
+option java_outer_classname = "ThdataProtoc";
+
+message Thdata{
+   int32 temp = 1;
+   int32 humidity = 2;
+   string prec= 3;
+}
